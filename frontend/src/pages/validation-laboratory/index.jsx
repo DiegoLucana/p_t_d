@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
@@ -6,71 +6,8 @@ import VideoUploadZone from './components/VideoUploadZone';
 import ConfigurationPanel from './components/ConfigurationPanel';
 import ProcessingStatus from './components/ProcessingStatus';
 import ValidationSessionsTable from './components/ValidationSessionsTable';
-import apiClient from '../../services/apiClient';
-
-// 🔹 Mock de respaldo por si el backend falla o aún no hay datos
-const MOCK_VALIDATION_SESSIONS = [
-  {
-    id: 1,
-    filename: 'bus_route_15_morning.mp4',
-    date: '2025-11-13T09:30:00',
-    duration: '5:23',
-    fileSize: '45.2 MB',
-    detectedCount: 42,
-    maxCapacity: 50,
-    accuracy: 94,
-    confidence: 87,
-    status: 'completed'
-  },
-  {
-    id: 2,
-    filename: 'terminal_central_rush.mp4',
-    date: '2025-11-12T17:45:00',
-    duration: '8:15',
-    fileSize: '78.9 MB',
-    detectedCount: 67,
-    maxCapacity: 60,
-    accuracy: 89,
-    confidence: 92,
-    status: 'completed'
-  },
-  {
-    id: 3,
-    filename: 'line_22_validation_test.mp4',
-    date: '2025-11-12T14:20:00',
-    duration: '3:42',
-    fileSize: '32.1 MB',
-    detectedCount: 28,
-    maxCapacity: 45,
-    accuracy: 96,
-    confidence: 94,
-    status: 'completed'
-  },
-  {
-    id: 4,
-    filename: 'evening_commute_analysis.mp4',
-    date: '2025-11-11T19:10:00',
-    duration: '6:58',
-    fileSize: '58.7 MB',
-    detectedCount: 0,
-    maxCapacity: 55,
-    accuracy: 0,
-    confidence: 0,
-    status: 'failed'
-  },
-  {
-    id: 5,
-    filename: 'weekend_service_check.mp4',
-    date: '2025-11-10T11:30:00',
-    duration: '4:12',
-    fileSize: '38.4 MB',
-    detectedCount: 15,
-    maxCapacity: 40,
-    accuracy: 91,
-    confidence: 88,
-    status: 'completed'
-  }
-];
+import useValidationSessions from '../../hooks/useValidationSessions';
+import { createValidationSession, uploadSessionVideo } from '../../services/validation';
 
 const ValidationLaboratory = () => {
   const navigate = useNavigate();
@@ -80,6 +17,7 @@ const ValidationLaboratory = () => {
   const [estimatedTime, setEstimatedTime] = useState(null);
   const [currentFile, setCurrentFile] = useState(null);
   const [activeSessionId, setActiveSessionId] = useState(null);
+  const { sessions: validationSessions, rawSessions, loading: sessionsLoading, error: sessionsError, refresh: refreshSessions } = useValidationSessions();
 
   const [configuration, setConfiguration] = useState({
     maxCapacity: 50,
@@ -94,79 +32,21 @@ const ValidationLaboratory = () => {
     maxPersonSize: 200
   });
 
-  // Estado de sesiones: ahora vienen del backend, con fallback a mocks
-  const [validationSessions, setValidationSessions] = useState(MOCK_VALIDATION_SESSIONS);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [sessionsError, setSessionsError] = useState(null);
-
-  // 🔹 Traer sesiones desde el backend
-  const fetchSessions = async () => {
-    setSessionsLoading(true);
-    setSessionsError(null);
-
-    try {
-      const response = await apiClient.get('/validation/sessions');
-
-      let data = response?.data || [];
-
-      // Si el backend devuelve { items: [...] }
-      if (data && Array.isArray(data.items)) {
-        data = data.items;
-      }
-
-      if (Array.isArray(data) && data.length > 0) {
-        // TODO: cuando sepamos exactamente los campos del backend,
-        // aquí mapeamos a { id, filename, status, ... } si hace falta.
-        setValidationSessions(data);
-      } else {
-        setValidationSessions(MOCK_VALIDATION_SESSIONS);
-      }
-    } catch (error) {
-      console.error('Error obteniendo sesiones de validación:', error);
-      setSessionsError('No se pudieron cargar las sesiones de validación.');
-      setValidationSessions(MOCK_VALIDATION_SESSIONS);
-    } finally {
-      setSessionsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchSessions();
-  }, []);
-
   // 🔹 Crear sesión en backend + subir video
   const createAndUploadValidationSession = async (file, maxCapacity) => {
     try {
-      // 1) Crear sesión
-      const createResp = await apiClient.post('/validation/sessions', {
-        max_capacity_declared: maxCapacity,
-        bus_id: null
-      });
-
-      const sessionId = createResp?.data?.id;
-      if (!sessionId) {
-        console.warn('No se recibió id de sesión al crear la validación, usando solo frontend mock.');
+      const session = await createValidationSession({ maxCapacity, busId: null });
+      if (!session?.id) {
+        console.warn('No se recibió id de sesión al crear la validación.');
         return null;
       }
 
-      // 2) Subir video
-      const formData = new FormData();
-      formData.append('file', file);
+      await uploadSessionVideo(session.id, file);
+      await refreshSessions();
 
-      await apiClient.post(`/validation/sessions/${sessionId}/upload-video`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      // 3) Actualizar lista de sesiones
-      await fetchSessions();
-
-      return sessionId;
+      return session.id;
     } catch (error) {
       console.error('Error al crear sesión de validación o subir video:', error);
-      // No lanzamos error hacia arriba para no romper la UX;
-      // simplemente seguimos con el flujo simulado del frontend.
       return null;
     }
   };
@@ -187,13 +67,13 @@ const ValidationLaboratory = () => {
     const sessionId = await createAndUploadValidationSession(file, configuration.maxCapacity);
     if (sessionId) {
       setActiveSessionId(sessionId);
+      startProcessing(sessionId, file);
+    } else {
+      setIsProcessing(false);
     }
-
-    // Seguimos con el flujo de simulación de procesamiento en el frontend
-    startProcessing(file);
   };
 
-  const startProcessing = (file) => {
+  const startProcessing = (sessionId, file) => {
     setIsProcessing(true);
     setProcessingProgress(0);
     setProcessingStage('Preparando análisis del video...');
@@ -221,19 +101,11 @@ const ValidationLaboratory = () => {
         setTimeout(() => {
           setIsProcessing(false);
           setCurrentFile(null);
-          // Por ahora seguimos navegando con datos simulados
-          navigate('/video-analysis-playback', { 
-            state: { 
+          refreshSessions();
+          navigate('/video-analysis-playback', {
+            state: {
               videoFile: file,
-              analysisResults: {
-                detectedCount: 42,
-                maxCapacity: configuration?.maxCapacity,
-                accuracy: 94,
-                confidence: 87,
-                processingTime: '2:15',
-                alertsTriggered: 3,
-                validationSessionId: activeSessionId
-              }
+              sessionId: sessionId || activeSessionId,
             }
           });
         }, 1000);
@@ -258,28 +130,19 @@ const ValidationLaboratory = () => {
   };
 
   const handleViewResults = (sessionId) => {
-    const session = validationSessions?.find(s => s?.id === sessionId);
+    const session = rawSessions?.find(s => s?.id === sessionId);
     if (session) {
       navigate('/video-analysis-playback', {
         state: {
           sessionData: session,
-          analysisResults: {
-            detectedCount: session?.detectedCount,
-            maxCapacity: session?.maxCapacity,
-            accuracy: session?.accuracy,
-            confidence: session?.confidence
-          }
+          sessionId,
         }
       });
     }
   };
 
   const handleReprocess = (sessionId) => {
-    const session = validationSessions?.find(s => s?.id === sessionId);
-    if (session) {
-      // Reprocesar simulando con la configuración actual
-      startProcessing({ name: session?.filename, size: session?.fileSize });
-    }
+    handleViewResults(sessionId);
   };
 
   const handleExport = (sessionId) => {
@@ -287,7 +150,7 @@ const ValidationLaboratory = () => {
       console.log('Exporting all validation sessions...');
       // Implementar exportación masiva
     } else {
-      const session = validationSessions?.find(s => s?.id === sessionId);
+      const session = rawSessions?.find(s => s?.id === sessionId);
       console.log('Exporting session:', session);
       // Implementar exportación individual
     }
