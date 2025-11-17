@@ -1,0 +1,47 @@
+# ===================================================
+# 1. DEPENDENCIAS Y ENTORNO VIRTUAL (Archivos grandes)
+# ===================================================
+# Ignorar el entorno virtual de Python (.venv) en el backend (Causa del error de 100MB)
+backend/.venv/
+
+# Ignorar las dependencias de Node.js (Frontend)
+frontend/node_modules/
+
+# ===================================================
+# 2. ARCHIVOS DE CACHÉ Y COMPILACIÓN
+# ===================================================
+# Python Cache (archivos .pyc)
+**/__pycache__/
+*.pyc
+# El arbol de tu backend ya tiene __pycache__ en app/, api/, core/, db/, etc.
+# Usar **/__pycache__/ asegura que se ignoren en cualquier subdirectorio.
+
+# Carpeta de compilación/producción de Vite/Frontend
+frontend/dist/
+frontend/build/
+
+# ===================================================
+# 3. ARCHIVOS SENSIBLES Y ESPECÍFICOS DE IDE/OS
+# ===================================================
+# Archivos de configuración de entorno (Contienen claves secretas/credenciales)
+**/.env
+.env.*
+
+# Configuraciones de IDEs (VS Code, IntelliJ)
+.vscode/
+.idea/
+
+# Archivos de macOS
+.DS_Store
+
+# ===================================================
+# 4. ESPECÍFICOS DEL PROYECTO
+# ===================================================
+# Archivos de lock de Node (si no quieres que Git los rastree)
+package-lock.json
+
+# Archivo de modelo (best.pt)
+# Si este archivo es grande y lo necesitas para que el proyecto funcione,
+# deberías usar Git LFS. Si no, ignóralo para evitar otro error de 100MB.
+# Si best.pt es < 100MB y es esencial para arrancar el backend, puedes omitir esta línea.
+# Si es grande (>100MB), **DEBES** ignorarlo o usar LFS.
