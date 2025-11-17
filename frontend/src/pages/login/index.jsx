@@ -4,12 +4,12 @@ import LoginHeader from './components/LoginHeader';
 import LoginForm from './components/LoginForm';
 import LoginFooter from './components/LoginFooter';
 import Icon from '../../components/AppIcon';
+import useAuth from '../../hooks/useAuth';
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [isSystemReady, setIsSystemReady] = useState(false);
+  const { login, loading, error } = useAuth();
 
   // Simulate system initialization
   useEffect(() => {
@@ -21,38 +21,11 @@ const LoginPage = () => {
   }, []);
 
   const handleLogin = async (formData) => {
-    setLoading(true);
-    setError('');
-
     try {
-      // Simulate authentication delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Mock role-based routing
-      const roleRoutes = {
-        'admin@busflow.com': '/real-time-monitoring-dashboard',
-        'operador@busflow.com': '/real-time-monitoring-dashboard',
-        'calidad@busflow.com': '/validation-laboratory'
-      };
-
-      const redirectRoute = roleRoutes?.[formData?.email] || '/real-time-monitoring-dashboard';
-
-      // Store user session (mock)
-      localStorage.setItem('busflow_user', JSON.stringify({
-        email: formData?.email,
-        role: formData?.email?.includes('admin') ? 'admin' : 
-              formData?.email?.includes('operador') ? 'operator' : 'qa',
-        loginTime: new Date()?.toISOString(),
-        rememberMe: formData?.rememberMe
-      }));
-
-      // Navigate to appropriate dashboard
-      navigate(redirectRoute);
-
+      await login(formData);
+      navigate('/real-time-monitoring-dashboard');
     } catch (err) {
-      setError('Error de conexión. Por favor, inténtelo de nuevo.');
-    } finally {
-      setLoading(false);
+      // El hook ya maneja el estado de error
     }
   };
 
@@ -105,7 +78,7 @@ const LoginPage = () => {
           {/* Content */}
           <div className="relative z-10">
             <LoginHeader />
-            <LoginForm 
+            <LoginForm
               onSubmit={handleLogin}
               loading={loading}
               error={error}
