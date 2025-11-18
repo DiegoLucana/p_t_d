@@ -7,7 +7,8 @@ const VideoPlayer = ({
   detectionData,
   onTimeUpdate,
   onCapacityExceeded,
-  maxCapacity = 50
+  maxCapacity = 50,
+  onVideoError,
 }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
