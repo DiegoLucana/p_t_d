@@ -1,7 +1,11 @@
+import os
+import tempfile
+from datetime import datetime
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from typing import Any       
-import os, tempfile  
+
 from app.api import deps
 from app.models.validation import ValidationSession, ValidationFrameStat
 from app.schemas.validation import (
@@ -9,7 +13,11 @@ from app.schemas.validation import (
     ValidationSessionOut,
     ValidationFrameStatOut,
 )
-from app.services.video_processing import process_video_with_yolo 
+from app.services.video_processing import (
+    process_video_with_yolo,
+    process_and_persist_validation_session,
+)
+
 router = APIRouter(prefix="/validation", tags=["validation"])
 
 
@@ -78,21 +86,42 @@ async def upload_validation_video(
     db: Session = Depends(deps.get_db),
     current_user=Depends(deps.get_current_user),
 ):
-    # Aquí solo guardamos el nombre del archivo "mock".
-    # Más adelante se puede integrar un almacenamiento real (S3, disco, etc.)
     session = db.query(ValidationSession).filter(ValidationSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    session_dir = os.path.join("media", "validation", str(session_id))
+    os.makedirs(session_dir, exist_ok=True)
+    original_path = os.path.join(session_dir, file.filename)
+
+    with open(original_path, "wb") as destination:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            destination.write(chunk)
+
     session.original_video_path = f"/media/validation/{session_id}/{file.filename}"
     session.status = "PROCESSING"
+    session.processing_started_at = datetime.utcnow()
+    db.add(session)
     db.commit()
     db.refresh(session)
 
-    # Más adelante: lanzar job para procesar el video,
-    # generar processed_video_path, frame_stats, etc.
+    try:
+        process_and_persist_validation_session(
+            db, session, original_path, max_capacity=session.max_capacity_declared
+        )
+    except Exception as exc:
+        session.status = "FAILED"
+        session.processing_finished_at = datetime.utcnow()
+        db.add(session)
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(exc))
 
+    db.refresh(session)
     return session
+
 
 @router.post("/process-video")
 async def process_validation_video(
