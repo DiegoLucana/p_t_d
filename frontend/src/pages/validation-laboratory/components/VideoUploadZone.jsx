@@ -25,18 +25,18 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
   const handleDrop = (e) => {
     e?.preventDefault();
     setIsDragOver(false);
-    
-    const files = Array.from(e?.dataTransfer?.files);
+
+    const files = Array.from(e?.dataTransfer?.files || []);
     handleFileSelection(files);
   };
 
   const handleFileInputChange = (e) => {
-    const files = Array.from(e?.target?.files);
+    const files = Array.from(e?.target?.files || []);
     handleFileSelection(files);
   };
 
   const handleFileSelection = (files) => {
-    const videoFile = files?.find(file => file?.type?.startsWith('video/'));
+    const videoFile = files?.find((file) => file?.type?.startsWith('video/'));
 
     if (!videoFile) {
       alert('Por favor, selecciona un archivo de video válido.');
@@ -69,7 +69,6 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
 
   useEffect(() => {
     if (uploadProgress >= 100 && selectedFile) {
-      // Ejecutar fuera del ciclo de renderizado del componente hijo
       const timeoutId = setTimeout(() => {
         onFileUpload(selectedFile);
         setSelectedFile(null);
@@ -79,16 +78,14 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
     }
   }, [onFileUpload, selectedFile, uploadProgress]);
 
-  useEffect(() => () => {
-    if (uploadIntervalRef.current) {
-      clearInterval(uploadIntervalRef.current);
-    }
+  useEffect(() => {
+    // cleanup al desmontar el componente
+    return () => {
+      if (uploadIntervalRef.current) {
+        clearInterval(uploadIntervalRef.current);
+      }
+    };
   }, []);
-}
-        return prev + 10;
-      });
-    }, 200);
-  };
 
   const openFileDialog = () => {
     fileInputRef?.current?.click();
@@ -103,13 +100,15 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
           <span>Formatos soportados</span>
         </div>
       </div>
+
       {/* Upload Area */}
       <div
         className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 ${
           isDragOver
             ? 'border-primary bg-primary/5 scale-[1.02]'
             : isProcessing
-            ? 'border-muted bg-muted/20' :'border-border hover:border-primary/50 hover:bg-muted/30'
+            ? 'border-muted bg-muted/20'
+            : 'border-border hover:border-primary/50 hover:bg-muted/30'
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -123,7 +122,7 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">Subiendo video...</p>
               <div className="w-full bg-muted rounded-full h-2">
-                <div 
+                <div
                   className="bg-primary h-2 rounded-full transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}
                 />
@@ -138,7 +137,9 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
             </div>
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">Procesando video...</p>
-              <p className="text-xs text-muted-foreground">Analizando contenido para detección de pasajeros</p>
+              <p className="text-xs text-muted-foreground">
+                Analizando contenido para detección de pasajeros
+              </p>
             </div>
           </div>
         ) : (
@@ -150,9 +151,7 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
               <p className="text-sm font-medium text-foreground">
                 Arrastra y suelta tu video aquí
               </p>
-              <p className="text-xs text-muted-foreground">
-                o haz clic para seleccionar un archivo
-              </p>
+              <p className="text-xs text-muted-foreground">o haz clic para seleccionar un archivo</p>
             </div>
             <Button
               variant="outline"
@@ -175,6 +174,7 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
           disabled={isProcessing}
         />
       </div>
+
       {/* File Requirements */}
       <div className="mt-4 p-4 bg-muted/50 rounded-lg">
         <h4 className="text-sm font-medium text-foreground mb-2">Requisitos del archivo:</h4>
