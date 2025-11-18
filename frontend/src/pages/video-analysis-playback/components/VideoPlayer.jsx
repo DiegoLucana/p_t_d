@@ -72,6 +72,13 @@ const VideoPlayer = ({
     }
   }, [currentTime, showOverlay, detectionData]);
 
+  useEffect(() => {
+    if (!videoSrc && onVideoError) {
+      onVideoError('No se pudo cargar el video procesado.');
+    }
+  }, [videoSrc, onVideoError]);
+
+
   const getCurrentDetection = (time) => {
     return detectionData?.find(detection => 
       Math.abs(detection?.timestamp - time) < 0.5
@@ -145,6 +152,16 @@ const VideoPlayer = ({
     setPlaybackRate(rate);
   };
 
+  const handleVideoError = () => {
+    setIsPlaying(false);
+    setDuration(0);
+    onTimeUpdate?.(0);
+    onVideoError?.(
+      'No se pudo cargar el video procesado. Verifica que el archivo exista en el servidor.'
+    );
+  };
+
+
   const formatTime = (time) => {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
@@ -171,6 +188,8 @@ const VideoPlayer = ({
           className="w-full h-full object-contain"
           preload="metadata"
           key={videoSrc || 'video-player'}
+          onError={handleVideoError}
+
         />
         
         {/* Detection Overlay Canvas */}
@@ -183,13 +202,15 @@ const VideoPlayer = ({
         )}
 
         {/* Loading Overlay */}
-        {!duration && (
+        {(!duration || !videoSrc) && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
             <div className="flex items-center space-x-3 text-white">
               <div className="animate-spin">
                 <Icon name="Loader2" size={24} />
               </div>
               <span>Cargando video...</span>
+              <span>{videoSrc ? 'Cargando video...' : 'Video procesado no disponible'}</span>
+
             </div>
           </div>
         )}

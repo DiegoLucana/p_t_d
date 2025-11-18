@@ -20,12 +20,33 @@ from app.services.video_processing import (
 
 router = APIRouter(prefix="/validation", tags=["validation"])
 
+def _build_public_media_url(path: str | None, request: Request) -> str | None:
+    if not path:
+        return None
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    base = str(request.base_url).rstrip("/")
+    return f"{base}{path}"
+
+
+def _include_media_urls(session: ValidationSession, request: Request) -> ValidationSession:
+    session.processed_video_url = _build_public_media_url(
+        session.processed_video_path, request
+    )
+    session.original_video_url = _build_public_media_url(
+        session.original_video_path, request
+    )
+    return session
+
+
 
 @router.post("/sessions", response_model=ValidationSessionOut)
 def create_validation_session(
     session_in: ValidationSessionCreate,
     db: Session = Depends(deps.get_db),
     current_user=Depends(deps.get_current_user),
+    request: Request = None,
+
 ):
     session = ValidationSession(
         created_by_user_id=current_user.id,
@@ -36,20 +57,22 @@ def create_validation_session(
     db.add(session)
     db.commit()
     db.refresh(session)
-    return session
+    return _include_media_urls(session, request)
 
 
 @router.get("/sessions", response_model=list[ValidationSessionOut])
 def list_validation_sessions(
     db: Session = Depends(deps.get_db),
     current_user=Depends(deps.get_current_user),
+    request: Request = None,
+
 ):
     sessions = (
         db.query(ValidationSession)
         .order_by(ValidationSession.created_at.desc())
         .all()
     )
-    return sessions
+    return [_include_media_urls(session, request) for session in sessions]
 
 
 @router.get("/sessions/{session_id}", response_model=ValidationSessionOut)
@@ -57,11 +80,13 @@ def get_validation_session(
     session_id: int,
     db: Session = Depends(deps.get_db),
     current_user=Depends(deps.get_current_user),
+    request: Request = None,
+
 ):
     session = db.query(ValidationSession).filter(ValidationSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return session
+    return _include_media_urls(session, request)
 
 
 @router.get("/sessions/{session_id}/frame-stats", response_model=list[ValidationFrameStatOut])
@@ -85,6 +110,8 @@ async def upload_validation_video(
     file: UploadFile = File(...),
     db: Session = Depends(deps.get_db),
     current_user=Depends(deps.get_current_user),
+    request: Request = None,
+
 ):
     session = db.query(ValidationSession).filter(ValidationSession.id == session_id).first()
     if not session:
@@ -120,7 +147,7 @@ async def upload_validation_video(
         raise HTTPException(status_code=500, detail=str(exc))
 
     db.refresh(session)
-    return session
+    return _include_media_urls(session, request)
 
 
 @router.post("/process-video")

@@ -12,7 +12,9 @@ class ValidationSessionOut(BaseModel):
     bus_id: int | None
     max_capacity_declared: int
     original_video_path: str | None
+    original_video_url: str | None = None
     processed_video_path: str | None
+    processed_video_url: str | None = None
     status: str
     total_frames: int | None
     detected_max_occupancy: int | None

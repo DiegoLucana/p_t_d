@@ -58,19 +58,39 @@ const VideoAnalysisPlayback = () => {
     }
   }, [sessionError]);
 
-    const buildVideoUrl = (path) => {
+  const handleVideoLoadError = (message) => {
+    setLoadError(message || 'No se pudo cargar el video procesado.');
+  };
+
+  const buildVideoUrl = (path) => {
     if (!path) return null;
-    if (path.startsWith('http')) return path;
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-    return `${baseUrl}${path}`;
+    if (/^https?:\/\//i.test(path)) return path;
+
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '';
+
+    try {
+      const parsed = new URL(apiBase);
+      return `${parsed.origin}${path}`;
+    } catch (e) {
+      const trimmed = apiBase.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+      if (trimmed) return `${trimmed}${path}`;
+      return path;
+    }
   };
 
   useEffect(() => {
-    const processedPath = sessionInfo?.processed_video_path || sessionData?.processed_video_path;
+    const processedPath =
+      sessionInfo?.processed_video_url ||
+      sessionInfo?.processed_video_path ||
+      sessionData?.processed_video_url ||
+      sessionData?.processed_video_path;
+
     if (processedPath) {
       const url = buildVideoUrl(processedPath);
       setVideoSrc(url);
       setLoadError(null);
+    } else if (sessionInfo) {
+      setLoadError('El video procesado no está disponible para esta sesión.');
     }
   }, [sessionData, sessionInfo]);
 
@@ -91,7 +111,7 @@ const VideoAnalysisPlayback = () => {
 
   // 🔹 Cargar datos reales del backend (si tenemos sessionId)
   useEffect(() => {
-    if (sessionInfo && !sessionInfo?.processed_video_path) {
+    if (sessionInfo && !sessionInfo?.processed_video_path && !sessionInfo?.processed_video_url) {
       setLoadError('El video procesado no está disponible para esta sesión.');
     }
   }, [sessionInfo]);
@@ -276,6 +296,7 @@ const VideoAnalysisPlayback = () => {
                   onTimeUpdate={handleTimeUpdate}
                   onCapacityExceeded={handleCapacityExceeded}
                   maxCapacity={maxCapacity}
+                  onVideoError={handleVideoLoadError}
                 />
               </div>
 
