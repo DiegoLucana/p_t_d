@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import ValidationBreadcrumb from '../../components/ui/ValidationBreadcrumb';
@@ -8,7 +8,7 @@ import DetectionStatistics from './components/DetectionStatistics';
 import AudioAlertTester from './components/AudioAlertTester';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
-import apiClient from '../../services/apiClient';
+import useValidationSessionDetails from '../../hooks/useValidationSessionDetails';
 
 const VideoAnalysisPlayback = () => {
   const location = useLocation();
@@ -20,17 +20,14 @@ const VideoAnalysisPlayback = () => {
   const [detectionHistory, setDetectionHistory] = useState([]);
   const [isCapacityExceeded, setIsCapacityExceeded] = useState(false);
   const [activeTab, setActiveTab] = useState('analysis');
-
-  // 🔹 NUEVO: estado para datos reales del backend
-  const [sessionInfo, setSessionInfo] = useState(location.state?.sessionData || null);
-  const [backendDetections, setBackendDetections] = useState([]);
+  const [detectionData, setDetectionData] = useState([]);
   const [videoSrc, setVideoSrc] = useState(null);
-  const [isLoadingData, setIsLoadingData] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   // Datos que vienen desde el Laboratorio de Validación
   const sessionData = location.state?.sessionData;
   const analysisResults = location.state?.analysisResults;
+  const uploadedFile = location.state?.videoFile;
 
   // Posibles fuentes de sessionId
   const sessionId =
@@ -39,179 +36,54 @@ const VideoAnalysisPlayback = () => {
     analysisResults?.sessionId ??
     null;
 
+  const {
+    session: sessionInfo,
+    frames: detectionFrames,
+    loading: isLoadingData,
+    error: sessionError,
+  } = useValidationSessionDetails(sessionId);
+
   // Capacidad máxima real usada para el contador y el beep
   const maxCapacity =
-    sessionData?.maxCapacity ??
+    sessionData?.max_capacity_declared ??
     analysisResults?.maxCapacity ??
     sessionInfo?.max_capacity_declared ??
     50;
 
-  // 🔹 Mocks originales como fallback
-  const mockVideoSrc =
-    'frontend\public\videos\video_procesado.mp4';
+  useEffect(() => {
+    setLoadError(sessionError);
+  }, [sessionError]);
 
-  const mockDetectionData = useMemo(
-    () => [
-      {
-        timestamp: 0,
-        count: 12,
-        confidence: 0.92,
-        detections: [
-          { x: 100, y: 150, width: 80, height: 120, confidence: 0.95 },
-          { x: 200, y: 180, width: 75, height: 115, confidence: 0.89 },
-          { x: 320, y: 160, width: 85, height: 125, confidence: 0.94 },
-          { x: 450, y: 140, width: 78, height: 118, confidence: 0.91 },
-          { x: 580, y: 170, width: 82, height: 122, confidence: 0.88 },
-          { x: 120, y: 280, width: 76, height: 116, confidence: 0.93 },
-          { x: 250, y: 300, width: 84, height: 124, confidence: 0.90 },
-          { x: 380, y: 290, width: 79, height: 119, confidence: 0.87 },
-          { x: 510, y: 310, width: 81, height: 121, confidence: 0.92 },
-          { x: 640, y: 285, width: 77, height: 117, confidence: 0.89 },
-          { x: 180, y: 420, width: 83, height: 123, confidence: 0.91 },
-          { x: 310, y: 440, width: 80, height: 120, confidence: 0.88 }
-        ]
-      },
-      {
-        timestamp: 30,
-        count: 18,
-        confidence: 0.89,
-        detections: Array.from({ length: 18 }, (_, i) => ({
-          x: 50 + (i % 6) * 120,
-          y: 120 + Math.floor(i / 6) * 140,
-          width: 75 + Math.random() * 15,
-          height: 115 + Math.random() * 15,
-          confidence: 0.85 + Math.random() * 0.15
-        }))
-      },
-      {
-        timestamp: 60,
-        count: 25,
-        confidence: 0.91,
-        detections: Array.from({ length: 25 }, (_, i) => ({
-          x: 40 + (i % 7) * 100,
-          y: 100 + Math.floor(i / 7) * 120,
-          width: 70 + Math.random() * 20,
-          height: 110 + Math.random() * 20,
-          confidence: 0.80 + Math.random() * 0.20
-        }))
-      },
-      {
-        timestamp: 90,
-        count: 32,
-        confidence: 0.87,
-        detections: Array.from({ length: 32 }, (_, i) => ({
-          x: 30 + (i % 8) * 90,
-          y: 80 + Math.floor(i / 8) * 110,
-          width: 65 + Math.random() * 25,
-          height: 105 + Math.random() * 25,
-          confidence: 0.75 + Math.random() * 0.25
-        }))
-      },
-      {
-        timestamp: 120,
-        count: 28,
-        confidence: 0.93,
-        detections: Array.from({ length: 28 }, (_, i) => ({
-          x: 45 + (i % 7) * 105,
-          y: 90 + Math.floor(i / 7) * 125,
-          width: 72 + Math.random() * 18,
-          height: 112 + Math.random() * 18,
-          confidence: 0.82 + Math.random() * 0.18
-        }))
-      },
-      {
-        timestamp: 150,
-        count: 35,
-        confidence: 0.85,
-        detections: Array.from({ length: 35 }, (_, i) => ({
-          x: 25 + (i % 9) * 85,
-          y: 70 + Math.floor(i / 9) * 105,
-          width: 68 + Math.random() * 22,
-          height: 108 + Math.random() * 22,
-          confidence: 0.78 + Math.random() * 0.22
-        }))
-      },
-      {
-        timestamp: 180,
-        count: 42,
-        confidence: 0.88,
-        detections: Array.from({ length: 42 }, (_, i) => ({
-          x: 20 + (i % 10) * 78,
-          y: 60 + Math.floor(i / 10) * 100,
-          width: 65 + Math.random() * 20,
-          height: 105 + Math.random() * 20,
-          confidence: 0.80 + Math.random() * 0.20
-        }))
-      },
-      {
-        timestamp: 210,
-        count: 55,
-        confidence: 0.82,
-        detections: Array.from({ length: 55 }, (_, i) => ({
-          x: 15 + (i % 12) * 65,
-          y: 50 + Math.floor(i / 12) * 95,
-          width: 62 + Math.random() * 18,
-          height: 102 + Math.random() * 18,
-          confidence: 0.75 + Math.random() * 0.25
-        }))
-      }
-    ],
-    []
-  );
+  useEffect(() => {
+    if (sessionInfo?.processed_video_path) {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      setVideoSrc(`${baseUrl}${sessionInfo.processed_video_path}`);
+    }
+  }, [sessionInfo]);
 
   // 🔹 Detecciones que realmente usará la UI (backend si hay, mocks si no)
-  const detectionData = backendDetections.length > 0 ? backendDetections : mockDetectionData;
-
+  useEffect(() => {
+    if (detectionFrames && detectionFrames.length > 0) {
+      setDetectionData(detectionFrames);
+    } else {
+      setDetectionData([]);
+    }
+  }, [detectionFrames]);
   // 🔹 Video final a reproducir (backend si trae ruta, sino mock)
-  const effectiveVideoSrc = videoSrc || mockVideoSrc;
+  useEffect(() => {
+    if (uploadedFile && !videoSrc) {
+      const objectUrl = URL.createObjectURL(uploadedFile);
+      setVideoSrc(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+  }, [uploadedFile, videoSrc]);
 
   // 🔹 Cargar datos reales del backend (si tenemos sessionId)
   useEffect(() => {
-    const fetchSessionData = async () => {
-      if (!sessionId) {
-        return;
-      }
-
-      try {
-        setIsLoadingData(true);
-        setLoadError(null);
-
-        const [sessionRes, framesRes] = await Promise.all([
-          apiClient.get(`/validation/sessions/${sessionId}`),
-          apiClient.get(`/validation/sessions/${sessionId}/frame-stats`)
-        ]);
-
-        const session = sessionRes.data;
-        setSessionInfo(session);
-
-        // Construir URL de video procesado si viene del backend
-        if (session?.processed_video_path) {
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-          setVideoSrc(`${baseUrl}${session.processed_video_path}`);
-        }
-
-        const frames = framesRes.data || [];
-
-        if (frames.length > 0) {
-          const transformed = frames.map((f, idx) => ({
-            timestamp: f.timestamp_relative ?? idx,
-            count: f.detected_passengers ?? 0,
-            confidence: f.confidence ?? 0.9,
-            // De momento sin bounding boxes reales; se integrarán cuando el pipeline de YOLO devuelva esa info
-            detections: []
-          }));
-          setBackendDetections(transformed);
-        }
-      } catch (error) {
-        console.error('Error cargando datos de validación', error);
-        setLoadError('No se pudo cargar el análisis desde el backend. Se mostrarán datos de ejemplo.');
-      } finally {
-        setIsLoadingData(false);
-      }
-    };
-
-    fetchSessionData();
-  }, [sessionId]);
+    if (!sessionId && !uploadedFile) {
+      setLoadError('No se encontró una sesión de validación asociada.');
+    }
+  }, [sessionId, uploadedFile]);
 
   const handleTimeUpdate = (time) => {
     setCurrentTime(time);
@@ -220,9 +92,9 @@ const VideoAnalysisPlayback = () => {
     const currentDetection = detectionData?.find((d) => Math.abs(d?.timestamp - time) < 15);
 
     if (currentDetection) {
-      setCurrentCount(currentDetection?.count);
-      setConfidence(currentDetection?.confidence);
-      setIsCapacityExceeded(currentDetection?.count > maxCapacity);
+      setCurrentCount(currentDetection?.count ?? 0);
+      setConfidence(currentDetection?.confidence ?? 0);
+      setIsCapacityExceeded((currentDetection?.count ?? 0) > maxCapacity);
 
       // Historial compacto
       setDetectionHistory((prev) => {
@@ -230,9 +102,9 @@ const VideoAnalysisPlayback = () => {
           ...prev,
           {
             timestamp: time,
-            count: currentDetection?.count,
-            confidence: currentDetection?.confidence
-          }
+            count: currentDetection?.count ?? 0,
+            confidence: currentDetection?.confidence ?? 0,
+          },
         ];
         return newHistory.slice(-20);
       });
@@ -260,7 +132,7 @@ const VideoAnalysisPlayback = () => {
   const tabs = [
     { id: 'analysis', label: 'Análisis de Video', icon: 'Play' },
     { id: 'statistics', label: 'Estadísticas', icon: 'BarChart3' },
-    { id: 'alerts', label: 'Alertas de Audio', icon: 'Volume2' }
+    { id: 'alerts', label: 'Alertas de Audio', icon: 'Volume2' },
   ];
 
   return (
@@ -357,7 +229,7 @@ const VideoAnalysisPlayback = () => {
               {/* Video Player - Takes up 2 columns on xl screens */}
               <div className="xl:col-span-2">
                 <VideoPlayer
-                  videoSrc={effectiveVideoSrc}
+                  videoSrc={videoSrc}
                   detectionData={detectionData}
                   onTimeUpdate={handleTimeUpdate}
                   onCapacityExceeded={handleCapacityExceeded}
@@ -382,8 +254,8 @@ const VideoAnalysisPlayback = () => {
             <DetectionStatistics
               detectionData={detectionData}
               accuracyMetrics={{}}
-              validationResults={{}}
-            />
+              validationResults={analysisResults || {}}
+              sessionInfo={sessionInfo}            />
           )}
 
           {activeTab === 'alerts' && (
@@ -403,8 +275,8 @@ const VideoAnalysisPlayback = () => {
               <div>
                 <h3 className="font-semibold text-foreground mb-1">Análisis Completado</h3>
                 <p className="text-sm text-muted-foreground">
-                  Video procesado {backendDetections.length > 0 ? 'con datos reales' : 'con datos de ejemplo'}{' '}
-                  y {detectionData?.length} puntos de detección analizados
+                  Video procesado {sessionInfo ? 'con datos reales' : 'sin datos procesados'}{' '}
+                  y {detectionData?.length || 0} puntos de detección analizados
                 </p>
               </div>
 

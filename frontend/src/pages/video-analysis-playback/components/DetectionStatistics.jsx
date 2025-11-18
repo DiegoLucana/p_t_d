@@ -1,46 +1,84 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import Icon from '../../../components/AppIcon';
 
-const DetectionStatistics = ({ 
+const formatTimeLabel = (seconds) => {
+  const safeSeconds = Number.isFinite(seconds) ? seconds : 0;
+  const minutes = Math.floor(safeSeconds / 60);
+  const secs = Math.floor(safeSeconds % 60);
+  return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
+const formatMetric = (value, suffix = '') => {
+  if (value === null || typeof value === 'undefined') return '—';
+  return `${value}${suffix}`;
+};
+
+const getMetricColor = (value, thresholds) => {
+  if (value === null || typeof value === 'undefined') return 'text-muted-foreground';
+  if (value >= thresholds?.good) return 'text-success';
+  if (value >= thresholds?.warning) return 'text-warning';
+  return 'text-error';
+};
+
+const getMetricBgColor = (value, thresholds) => {
+  if (value === null || typeof value === 'undefined') return 'bg-muted/40';
+  if (value >= thresholds?.good) return 'bg-success/10';
+  if (value >= thresholds?.warning) return 'bg-warning/10';
+  return 'bg-error/10';
+};
+
+const DetectionStatistics = ({
   detectionData = [],
   accuracyMetrics = {},
-  validationResults = {}
+  validationResults = {},
+  sessionInfo,
 }) => {
-  // Mock statistics data
-  const statisticsData = [
-    { time: '00:00', detected: 12, manual: 12, accuracy: 100 },
-    { time: '00:30', detected: 18, manual: 17, accuracy: 94 },
-    { time: '01:00', detected: 25, manual: 24, accuracy: 96 },
-    { time: '01:30', detected: 32, manual: 31, accuracy: 97 },
-    { time: '02:00', detected: 28, manual: 29, accuracy: 97 },
-    { time: '02:30', detected: 35, manual: 33, accuracy: 94 },
-    { time: '03:00', detected: 42, manual: 41, accuracy: 98 },
-    { time: '03:30', detected: 38, manual: 39, accuracy: 97 }
-  ];
+  const statisticsData = useMemo(
+    () =>
+      detectionData.map((item, index) => ({
+        time: formatTimeLabel(item?.timestamp ?? index),
+        detected: item?.count ?? 0,
+        manual: validationResults?.manualCounts?.[index] ?? null,
+        accuracy:
+          validationResults?.accuracyTimeline?.[index] ??
+          validationResults?.overallAccuracy ??
+          accuracyMetrics?.overall ?? null,
+      })),
+    [accuracyMetrics?.overall, detectionData, validationResults?.accuracyTimeline, validationResults?.manualCounts, validationResults?.overallAccuracy],
+  );
+
+  const totalDetections = detectionData.reduce((sum, item) => sum + (item?.count ?? 0), 0);
+  const peakOccupancy = detectionData.reduce((max, item) => Math.max(max, item?.count ?? 0), 0);
+  const avgConfidence = detectionData.length
+    ? (detectionData.reduce((sum, item) => sum + (item?.confidence ?? 0), 0) / detectionData.length) * 100
+    : null;
+
+  const processingTimeSeconds =
+    sessionInfo?.processing_started_at && sessionInfo?.processing_finished_at
+      ? Math.round(
+          (new Date(sessionInfo.processing_finished_at).getTime() -
+            new Date(sessionInfo.processing_started_at).getTime()) /
+            1000,
+        )
+      : null;
 
   const performanceMetrics = {
-    overallAccuracy: 96.2,
-    falsePositiveRate: 3.1,
-    falseNegativeRate: 2.7,
-    averageConfidence: 87.4,
-    processingTime: 2.3,
-    totalDetections: 1247,
-    validDetections: 1199,
-    invalidDetections: 48
+    overallAccuracy: validationResults?.overallAccuracy ?? accuracyMetrics?.overall ?? null,
+    falsePositiveRate: validationResults?.falsePositiveRate ?? null,
+    falseNegativeRate: validationResults?.falseNegativeRate ?? null,
+    averageConfidence: validationResults?.averageConfidence ?? (avgConfidence !== null ? Number(avgConfidence.toFixed(1)) : null),
+    processingTime: validationResults?.processingTime ?? (processingTimeSeconds !== null ? `${processingTimeSeconds}s` : null),
+    totalDetections,
+    validDetections: validationResults?.validDetections ?? null,
+    invalidDetections: validationResults?.invalidDetections ?? null,
+    peakOccupancy,
   };
 
-  const getMetricColor = (value, thresholds) => {
-    if (value >= thresholds?.good) return 'text-success';
-    if (value >= thresholds?.warning) return 'text-warning';
-    return 'text-error';
-  };
+  const validationStatus = validationResults?.status || sessionInfo?.status;
+  const statusLabel = validationStatus ? validationStatus.toString().toUpperCase() : 'PENDIENTE';
 
-  const getMetricBgColor = (value, thresholds) => {
-    if (value >= thresholds?.good) return 'bg-success/10';
-    if (value >= thresholds?.warning) return 'bg-warning/10';
-    return 'bg-error/10';
-  };
+  const hasTimelineData = statisticsData.length > 0;
 
   return (
     <div className="space-y-6">
@@ -55,23 +93,23 @@ const DetectionStatistics = ({
           {/* Overall Accuracy */}
           <div className={`${getMetricBgColor(performanceMetrics?.overallAccuracy, { good: 95, warning: 85 })} rounded-lg p-4 text-center`}>
             <div className={`text-2xl font-bold ${getMetricColor(performanceMetrics?.overallAccuracy, { good: 95, warning: 85 })}`}>
-              {performanceMetrics?.overallAccuracy}%
+              {formatMetric(performanceMetrics?.overallAccuracy, performanceMetrics?.overallAccuracy !== null ? '%' : '')}
             </div>
             <div className="text-sm text-muted-foreground">Precisión General</div>
           </div>
 
           {/* False Positive Rate */}
-          <div className={`${getMetricBgColor(100 - performanceMetrics?.falsePositiveRate, { good: 95, warning: 90 })} rounded-lg p-4 text-center`}>
-            <div className={`text-2xl font-bold ${getMetricColor(100 - performanceMetrics?.falsePositiveRate, { good: 95, warning: 90 })}`}>
-              {performanceMetrics?.falsePositiveRate}%
+          <div className={`${getMetricBgColor(performanceMetrics?.falsePositiveRate, { good: 5, warning: 10 })} rounded-lg p-4 text-center`}>
+            <div className={`text-2xl font-bold ${getMetricColor(performanceMetrics?.falsePositiveRate, { good: 5, warning: 10 })}`}>
+              {formatMetric(performanceMetrics?.falsePositiveRate, performanceMetrics?.falsePositiveRate !== null ? '%' : '')}
             </div>
             <div className="text-sm text-muted-foreground">Falsos Positivos</div>
           </div>
 
           {/* False Negative Rate */}
-          <div className={`${getMetricBgColor(100 - performanceMetrics?.falseNegativeRate, { good: 95, warning: 90 })} rounded-lg p-4 text-center`}>
-            <div className={`text-2xl font-bold ${getMetricColor(100 - performanceMetrics?.falseNegativeRate, { good: 95, warning: 90 })}`}>
-              {performanceMetrics?.falseNegativeRate}%
+          <div className={`${getMetricBgColor(performanceMetrics?.falseNegativeRate, { good: 5, warning: 10 })} rounded-lg p-4 text-center`}>
+            <div className={`text-2xl font-bold ${getMetricColor(performanceMetrics?.falseNegativeRate, { good: 5, warning: 10 })}`}>
+              {formatMetric(performanceMetrics?.falseNegativeRate, performanceMetrics?.falseNegativeRate !== null ? '%' : '')}
             </div>
             <div className="text-sm text-muted-foreground">Falsos Negativos</div>
           </div>
@@ -79,7 +117,7 @@ const DetectionStatistics = ({
           {/* Average Confidence */}
           <div className={`${getMetricBgColor(performanceMetrics?.averageConfidence, { good: 85, warning: 70 })} rounded-lg p-4 text-center`}>
             <div className={`text-2xl font-bold ${getMetricColor(performanceMetrics?.averageConfidence, { good: 85, warning: 70 })}`}>
-              {performanceMetrics?.averageConfidence}%
+              {formatMetric(performanceMetrics?.averageConfidence, performanceMetrics?.averageConfidence !== null ? '%' : '')}
             </div>
             <div className="text-sm text-muted-foreground">Confianza Promedio</div>
           </div>
@@ -93,29 +131,35 @@ const DetectionStatistics = ({
         </h3>
 
         <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={statisticsData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis 
-                dataKey="time" 
-                stroke="var(--color-muted-foreground)"
-                fontSize={12}
-              />
-              <YAxis 
-                stroke="var(--color-muted-foreground)"
-                fontSize={12}
-              />
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: 'var(--color-popover)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '8px'
-                }}
-              />
-              <Bar dataKey="detected" fill="var(--color-primary)" name="Detectado" />
-              <Bar dataKey="manual" fill="var(--color-accent)" name="Manual" />
-            </BarChart>
-          </ResponsiveContainer>
+          {hasTimelineData ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={statisticsData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis
+                  dataKey="time"
+                  stroke="var(--color-muted-foreground)"
+                  fontSize={12}
+                />
+                <YAxis
+                  stroke="var(--color-muted-foreground)"
+                  fontSize={12}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--color-popover)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Bar dataKey="detected" fill="var(--color-primary)" name="Detectado" />
+                <Bar dataKey="manual" fill="var(--color-accent)" name="Manual" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-sm text-muted-foreground border border-dashed border-border rounded-md">
+              Aún no hay detecciones suficientes para graficar.
+            </div>
+          )}
         </div>
       </div>
       {/* Accuracy Timeline */}
@@ -126,36 +170,42 @@ const DetectionStatistics = ({
         </h3>
 
         <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={statisticsData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis 
-                dataKey="time" 
-                stroke="var(--color-muted-foreground)"
-                fontSize={12}
-              />
-              <YAxis 
-                domain={[90, 100]}
-                stroke="var(--color-muted-foreground)"
-                fontSize={12}
-              />
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: 'var(--color-popover)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '8px'
-                }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="accuracy" 
-                stroke="var(--color-success)" 
-                strokeWidth={3}
-                dot={{ fill: 'var(--color-success)', strokeWidth: 2, r: 4 }}
-                name="Precisión %"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {hasTimelineData ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={statisticsData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis
+                  dataKey="time"
+                  stroke="var(--color-muted-foreground)"
+                  fontSize={12}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  stroke="var(--color-muted-foreground)"
+                  fontSize={12}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--color-popover)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="accuracy"
+                  stroke="var(--color-success)"
+                  strokeWidth={3}
+                  dot={{ fill: 'var(--color-success)', strokeWidth: 2, r: 4 }}
+                  name="Precisión %"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-sm text-muted-foreground border border-dashed border-border rounded-md">
+              Sin registros de precisión para mostrar.
+            </div>
+          )}
         </div>
       </div>
       {/* Detailed Statistics */}
@@ -170,19 +220,23 @@ const DetectionStatistics = ({
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Total de Detecciones:</span>
-              <span className="font-semibold text-foreground">{performanceMetrics?.totalDetections}</span>
+              <span className="font-semibold text-foreground">{formatMetric(performanceMetrics?.totalDetections)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Pico de Ocupación:</span>
+              <span className="font-semibold text-foreground">{formatMetric(performanceMetrics?.peakOccupancy)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Detecciones Válidas:</span>
-              <span className="font-semibold text-success">{performanceMetrics?.validDetections}</span>
+              <span className="font-semibold text-success">{formatMetric(performanceMetrics?.validDetections)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Detecciones Inválidas:</span>
-              <span className="font-semibold text-error">{performanceMetrics?.invalidDetections}</span>
+              <span className="font-semibold text-error">{formatMetric(performanceMetrics?.invalidDetections)}</span>
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-border">
               <span className="text-muted-foreground">Tiempo de Procesamiento:</span>
-              <span className="font-semibold text-foreground">{performanceMetrics?.processingTime}s</span>
+              <span className="font-semibold text-foreground">{formatMetric(performanceMetrics?.processingTime)}</span>
             </div>
           </div>
         </div>
@@ -199,20 +253,24 @@ const DetectionStatistics = ({
               <span className="text-muted-foreground">Estado de Validación:</span>
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-success rounded-full" />
-                <span className="text-success font-medium">Aprobado</span>
+                <span className="text-success font-medium">{statusLabel}</span>
               </div>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Puntuación de Calidad:</span>
-              <span className="font-semibold text-success">A+</span>
+              <span className="font-semibold text-success">{formatMetric(performanceMetrics?.overallAccuracy, performanceMetrics?.overallAccuracy !== null ? '%' : '')}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Umbral de Confianza:</span>
-              <span className="font-semibold text-foreground">&gt; 80%</span>
+              <span className="font-semibold text-foreground">{formatMetric(performanceMetrics?.averageConfidence, performanceMetrics?.averageConfidence !== null ? '%' : '')}</span>
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-border">
               <span className="text-muted-foreground">Fecha de Validación:</span>
-              <span className="font-semibold text-foreground">13/11/2025</span>
+              <span className="font-semibold text-foreground">
+                {sessionInfo?.created_at
+                  ? new Date(sessionInfo.created_at).toLocaleDateString('es-ES')
+                  : '—'}
+              </span>
             </div>
           </div>
         </div>

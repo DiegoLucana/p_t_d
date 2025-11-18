@@ -18,12 +18,16 @@ const ValidationSessionsTable = ({ sessions = [], onViewResults, onReprocess, on
   const sortedSessions = [...sessions]?.sort((a, b) => {
     let aValue = a?.[sortField];
     let bValue = b?.[sortField];
-    
+
     if (sortField === 'date') {
       aValue = new Date(aValue);
       bValue = new Date(bValue);
+    } else if (typeof aValue === 'undefined' || aValue === null) {
+      aValue = '';
+    } else if (typeof bValue === 'undefined' || bValue === null) {
+      bValue = '';
     }
-    
+
     if (sortDirection === 'asc') {
       return aValue > bValue ? 1 : -1;
     } else {
@@ -32,7 +36,7 @@ const ValidationSessionsTable = ({ sessions = [], onViewResults, onReprocess, on
   });
 
   const getStatusColor = (status) => {
-    switch (status) {
+    switch (status?.toLowerCase?.()) {
       case 'completed': return 'text-success';
       case 'failed': return 'text-destructive';
       case 'processing': return 'text-warning';
@@ -41,7 +45,7 @@ const ValidationSessionsTable = ({ sessions = [], onViewResults, onReprocess, on
   };
 
   const getStatusIcon = (status) => {
-    switch (status) {
+    switch (status?.toLowerCase?.()) {
       case 'completed': return 'CheckCircle';
       case 'failed': return 'XCircle';
       case 'processing': return 'Loader2';
@@ -50,9 +54,15 @@ const ValidationSessionsTable = ({ sessions = [], onViewResults, onReprocess, on
   };
 
   const getAccuracyColor = (accuracy) => {
+    if (typeof accuracy !== 'number') return 'text-muted-foreground';
     if (accuracy >= 90) return 'text-success';
     if (accuracy >= 75) return 'text-warning';
     return 'text-destructive';
+  };
+
+  const formatMetric = (value, suffix = '') => {
+    if (value === null || typeof value === 'undefined') return '—';
+    return `${value}${suffix}`;
   };
 
   if (sessions?.length === 0) {
@@ -163,43 +173,43 @@ const ValidationSessionsTable = ({ sessions = [], onViewResults, onReprocess, on
                     </div>
                     <div>
                       <div className="text-sm font-medium text-foreground truncate max-w-[200px]">
-                        {session?.filename}
+                        {session?.filename || `Sesión ${session?.id}`}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {session?.duration} • {session?.fileSize}
+                        {formatMetric(session?.duration)} • {formatMetric(session?.fileSize)}
                       </div>
                     </div>
                   </div>
                 </td>
                 <td className="p-4">
                   <div className="text-sm text-foreground">
-                    {new Date(session.date)?.toLocaleDateString('es-ES', {
+                    {session?.date ? new Date(session.date)?.toLocaleDateString('es-ES', {
                       day: '2-digit',
                       month: '2-digit',
                       year: 'numeric'
-                    })}
+                    }) : '—'}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {new Date(session.date)?.toLocaleTimeString('es-ES', {
+                    {session?.date ? new Date(session.date)?.toLocaleTimeString('es-ES', {
                       hour: '2-digit',
                       minute: '2-digit'
-                    })}
+                    }) : ''}
                   </div>
                 </td>
                 <td className="p-4">
                   <div className="text-sm font-medium text-foreground">
-                    {session?.detectedCount}
+                    {formatMetric(session?.detectedCount)}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Máx: {session?.maxCapacity}
+                    Máx: {formatMetric(session?.maxCapacity)}
                   </div>
                 </td>
                 <td className="p-4">
                   <div className={`text-sm font-medium ${getAccuracyColor(session?.accuracy)}`}>
-                    {session?.accuracy}%
+                    {typeof session?.accuracy === 'number' ? `${session?.accuracy}%` : '—'}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Confianza: {session?.confidence}%
+                    Confianza: {typeof session?.confidence === 'number' ? `${session?.confidence}%` : '—'}
                   </div>
                 </td>
                 <td className="p-4">
