@@ -1,11 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
 const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
+  const uploadIntervalRef = useRef(null);
 
   const supportedFormats = ['.mp4', '.avi', '.mov', '.mkv', '.webm'];
   const maxFileSize = 500; // MB
@@ -35,7 +37,7 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
 
   const handleFileSelection = (files) => {
     const videoFile = files?.find(file => file?.type?.startsWith('video/'));
-    
+
     if (!videoFile) {
       alert('Por favor, selecciona un archivo de video válido.');
       return;
@@ -46,15 +48,43 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
       return;
     }
 
-    // Simulate upload progress
+    setSelectedFile(videoFile);
     setUploadProgress(0);
-    const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          onFileUpload(videoFile);
-          return 100;
+
+    if (uploadIntervalRef.current) {
+      clearInterval(uploadIntervalRef.current);
+    }
+
+    uploadIntervalRef.current = setInterval(() => {
+      setUploadProgress((prev) => {
+        const nextValue = Math.min(prev + 10, 100);
+        if (nextValue >= 100 && uploadIntervalRef.current) {
+          clearInterval(uploadIntervalRef.current);
+          uploadIntervalRef.current = null;
         }
+        return nextValue;
+      });
+    }, 200);
+  };
+
+  useEffect(() => {
+    if (uploadProgress >= 100 && selectedFile) {
+      // Ejecutar fuera del ciclo de renderizado del componente hijo
+      const timeoutId = setTimeout(() => {
+        onFileUpload(selectedFile);
+        setSelectedFile(null);
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [onFileUpload, selectedFile, uploadProgress]);
+
+  useEffect(() => () => {
+    if (uploadIntervalRef.current) {
+      clearInterval(uploadIntervalRef.current);
+    }
+  }, []);
+}
         return prev + 10;
       });
     }, 200);

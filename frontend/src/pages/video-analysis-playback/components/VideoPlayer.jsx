@@ -2,12 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const VideoPlayer = ({ 
-  videoSrc, 
-  detectionData, 
-  onTimeUpdate, 
+const VideoPlayer = ({
+  videoSrc,
+  detectionData,
+  onTimeUpdate,
   onCapacityExceeded,
-  maxCapacity = 50 
+  maxCapacity = 50
 }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -18,6 +18,17 @@ const VideoPlayer = ({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showOverlay, setShowOverlay] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const video = videoRef?.current;
+    if (!video) return;
+
+    video.pause();
+    video.load?.();
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+  }, [videoSrc]);
 
   useEffect(() => {
     const video = videoRef?.current;
@@ -159,6 +170,7 @@ const VideoPlayer = ({
           src={videoSrc}
           className="w-full h-full object-contain"
           preload="metadata"
+          key={videoSrc || 'video-player'}
         />
         
         {/* Detection Overlay Canvas */}

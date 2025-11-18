@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
@@ -17,8 +17,15 @@ const ValidationLaboratory = () => {
   const [estimatedTime, setEstimatedTime] = useState(null);
   const [currentFile, setCurrentFile] = useState(null);
   const [activeSessionId, setActiveSessionId] = useState(null);
-  const { sessions: validationSessions, rawSessions, loading: sessionsLoading, error: sessionsError, refresh: refreshSessions } = useValidationSessions();
-  
+  const processingIntervalRef = useRef(null);
+  const {
+    sessions: validationSessions,
+    rawSessions,
+    loading: sessionsLoading,
+    error: sessionsError,
+    refresh: refreshSessions,
+  } = useValidationSessions();
+    
   const [configuration, setConfiguration] = useState({
     maxCapacity: 50,
     detectionSensitivity: 75,
@@ -91,23 +98,30 @@ const ValidationLaboratory = () => {
     ];
 
     let currentStageIndex = 0;
-    const processInterval = setInterval(() => {
-      if (currentStageIndex < stages?.length) {
+    if (processingIntervalRef.current) {
+      clearInterval(processingIntervalRef.current);
+    }
+
+    processingIntervalRef.current = setInterval(() => {
+    if (currentStageIndex < stages?.length) {
         const stage = stages?.[currentStageIndex];
         setProcessingProgress(stage?.progress);
         setProcessingStage(stage?.stage);
         setEstimatedTime(stage?.time);
         currentStageIndex++;
       } else {
-        clearInterval(processInterval);
+        clearInterval(processingIntervalRef.current);
+        processingIntervalRef.current = null;
         setTimeout(() => {
           setIsProcessing(false);
           setCurrentFile(null);
           refreshSessions();
+
+          const sessionFromList = rawSessions?.find((s) => s?.id === (sessionId || activeSessionId));
           navigate('/video-analysis-playback', {
             state: {
-              videoFile: file,
               sessionId: sessionId || activeSessionId,
+              sessionData: sessionFromList,
             }
           });
         }, 1000);
@@ -129,7 +143,35 @@ const ValidationLaboratory = () => {
     setProcessingProgress(0);
     setProcessingStage('');
     setEstimatedTime(null);
+    if (processingIntervalRef.current) {
+      clearInterval(processingIntervalRef.current);
+      processingIntervalRef.current = null;
+    }
   };
+
+  const handleNavigateToAnalysis = () => {
+    const completedSessions = rawSessions?.filter((session) => session?.status?.toLowerCase?.() === 'completed');
+    if (!completedSessions || completedSessions.length === 0) return;
+
+    const latest = completedSessions.sort(
+      (a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0)
+    )?.[0];
+
+    if (latest?.id) {
+      navigate('/video-analysis-playback', {
+        state: {
+          sessionId: latest.id,
+          sessionData: latest,
+        }
+      });
+    }
+  };
+
+  useEffect(() => () => {
+    if (processingIntervalRef.current) {
+      clearInterval(processingIntervalRef.current);
+    }
+  }, []);
 
   const handleViewResults = (sessionId) => {
     const session = rawSessions?.find(s => s?.id === sessionId);
@@ -199,7 +241,7 @@ const ValidationLaboratory = () => {
                 size="sm"
                 iconName="Play"
                 iconPosition="left"
-                onClick={() => navigateToRoute('/video-analysis-playback')}
+                onClick={handleNavigateToAnalysis}
                 disabled={validationSessions?.filter(s => s?.status === 'completed')?.length === 0}
               >
                 Ver Análisis

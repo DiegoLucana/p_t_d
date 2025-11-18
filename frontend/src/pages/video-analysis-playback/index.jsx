@@ -27,10 +27,12 @@ const VideoAnalysisPlayback = () => {
   // Datos que vienen desde el Laboratorio de Validación
   const sessionData = location.state?.sessionData;
   const analysisResults = location.state?.analysisResults;
-  const uploadedFile = location.state?.videoFile;
 
+  const searchParams = new URLSearchParams(location.search);
+  const sessionIdFromQuery = searchParams.get('sessionId');
   // Posibles fuentes de sessionId
   const sessionId =
+    sessionIdFromQuery ??
     location.state?.sessionId ??
     sessionData?.id ??
     analysisResults?.sessionId ??
@@ -51,15 +53,26 @@ const VideoAnalysisPlayback = () => {
     50;
 
   useEffect(() => {
-    setLoadError(sessionError);
+    if (sessionError) {
+      setLoadError(sessionError);
+    }
   }, [sessionError]);
 
+    const buildVideoUrl = (path) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    return `${baseUrl}${path}`;
+  };
+
   useEffect(() => {
-    if (sessionInfo?.processed_video_path) {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      setVideoSrc(`${baseUrl}${sessionInfo.processed_video_path}`);
+    const processedPath = sessionInfo?.processed_video_path || sessionData?.processed_video_path;
+    if (processedPath) {
+      const url = buildVideoUrl(processedPath);
+      setVideoSrc(url);
+      setLoadError(null);
     }
-  }, [sessionInfo]);
+  }, [sessionData, sessionInfo]);
 
   // 🔹 Detecciones que realmente usará la UI (backend si hay, mocks si no)
   useEffect(() => {
@@ -71,25 +84,54 @@ const VideoAnalysisPlayback = () => {
   }, [detectionFrames]);
   // 🔹 Video final a reproducir (backend si trae ruta, sino mock)
   useEffect(() => {
-    if (uploadedFile && !videoSrc) {
-      const objectUrl = URL.createObjectURL(uploadedFile);
-      setVideoSrc(objectUrl);
-      return () => URL.revokeObjectURL(objectUrl);
+    if (!sessionId) {
+      setLoadError('No se encontró una sesión de validación asociada.');
     }
-  }, [uploadedFile, videoSrc]);
+  }, [sessionId]);
 
   // 🔹 Cargar datos reales del backend (si tenemos sessionId)
   useEffect(() => {
-    if (!sessionId && !uploadedFile) {
-      setLoadError('No se encontró una sesión de validación asociada.');
+    if (sessionInfo && !sessionInfo?.processed_video_path) {
+      setLoadError('El video procesado no está disponible para esta sesión.');
     }
-  }, [sessionId, uploadedFile]);
+  }, [sessionInfo]);
+
+  useEffect(() => {
+    if (detectionData.length === 0) {
+      setCurrentCount(0);
+      setConfidence(0);
+      setDetectionHistory([]);
+      setIsCapacityExceeded(false);
+    } else {
+      const firstDetection = detectionData[0];
+      setCurrentCount(firstDetection?.count ?? 0);
+      setConfidence(firstDetection?.confidence ?? 0);
+    }
+  }, [detectionData]);
+
+  useEffect(() => {
+    setCurrentTime(0);
+    setDetectionHistory([]);
+  }, [sessionId]);
+
+  const findClosestDetection = (time) => {
+    if (!Array.isArray(detectionData) || detectionData.length === 0) return null;
+
+    return detectionData.reduce((closest, detection) => {
+      if (!closest) return detection;
+
+      const currentDiff = Math.abs(Number(detection?.timestamp ?? 0) - time);
+      const closestDiff = Math.abs(Number(closest?.timestamp ?? 0) - time);
+
+      return currentDiff < closestDiff ? detection : closest;
+    }, null);
+  };
 
   const handleTimeUpdate = (time) => {
     setCurrentTime(time);
 
     // Buscar detección más cercana a este instante
-    const currentDetection = detectionData?.find((d) => Math.abs(d?.timestamp - time) < 15);
+    const currentDetection = findClosestDetection(time);
 
     if (currentDetection) {
       setCurrentCount(currentDetection?.count ?? 0);

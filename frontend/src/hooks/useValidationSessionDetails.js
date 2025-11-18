@@ -5,18 +5,25 @@ const mapFrameToDetection = (frame, index) => {
   const rawDetections = frame?.raw_metadata_json?.detections;
   const detections = Array.isArray(rawDetections)
     ? rawDetections.map((detection) => ({
-        x: detection?.x ?? detection?.bbox?.[0] ?? 0,
-        y: detection?.y ?? detection?.bbox?.[1] ?? 0,
-        width: detection?.width ?? detection?.bbox?.[2] ?? 0,
-        height: detection?.height ?? detection?.bbox?.[3] ?? 0,
-        confidence: detection?.confidence ?? detection?.score ?? 0,
+        x: Number(detection?.x ?? detection?.bbox?.[0] ?? 0),
+        y: Number(detection?.y ?? detection?.bbox?.[1] ?? 0),
+        width: Number(detection?.width ?? detection?.bbox?.[2] ?? 0),
+        height: Number(detection?.height ?? detection?.bbox?.[3] ?? 0),
+        confidence: Number(detection?.confidence ?? detection?.score ?? 0),
       }))
     : [];
 
+  const timestamp = Number(frame?.timestamp_relative ?? index);
+  const count = Number(frame?.detected_passengers ?? detections.length ?? 0);
+  const confidence =
+    frame?.raw_metadata_json?.confidence !== undefined
+      ? Number(frame?.raw_metadata_json?.confidence)
+      : null;
+
   return {
-    timestamp: frame?.timestamp_relative ?? index,
-    count: frame?.detected_passengers ?? detections.length,
-    confidence: frame?.raw_metadata_json?.confidence ?? null,
+    timestamp,
+    count,
+    confidence,
     detections,
   };
 };
