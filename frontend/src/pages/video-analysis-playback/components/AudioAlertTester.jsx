@@ -19,10 +19,26 @@ const AudioAlertTester = ({
 
   // Mock audio sources for different alert types
   const alertSounds = {
-    warning: '/assets/audio/warning-beep.mp3',
-    critical: '/assets/audio/critical-alarm.mp3',
-    voice: '/assets/audio/voice-alert.mp3'
+    warning: '/audio/warning-beep.wav',
+    critical: '/audio/critical-alarm.wav',
+    voice: '/audio/voice-alert.wav'
   };
+
+  useEffect(() => {
+    if (audioRef?.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
+
+  useEffect(() => {
+    if (audioRef?.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current.load();
+      setIsPlaying(false);
+    }
+  }, [alertType]);
+
 
   useEffect(() => {
     // Solo disparar cuando:
@@ -270,7 +286,7 @@ const AudioAlertTester = ({
         preload="none"
         onEnded={() => setIsPlaying(false)}
       >
-        <source src={alertSounds?.[alertType]} type="audio/mpeg" />
+        <source src={alertSounds?.[alertType]} type="audio/wav" />
         Su navegador no soporta el elemento de audio.
       </audio>
     </div>

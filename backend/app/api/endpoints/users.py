@@ -26,6 +26,11 @@ def create_user(user_in: UserCreate, db: Session = Depends(deps.get_db)):
     db.refresh(user)
     return user
 
+@router.get("/me", response_model=UserOut)
+def get_current_user(current_user: User = Depends(deps.get_current_user)):
+    return current_user
+
+
 
 @router.get("/", response_model=list[UserOut])
 def list_users(db: Session = Depends(deps.get_db)):

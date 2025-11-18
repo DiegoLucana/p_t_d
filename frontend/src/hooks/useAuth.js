@@ -31,6 +31,11 @@ const useAuth = () => {
         localStorage.removeItem('remembered_email');
       }
 
+      if (email) {
+        localStorage.setItem('user_email', email);
+      }
+
+
       return data;
     } catch (err) {
       const message = parseErrorMessage(err);

@@ -1,11 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Icon from '../AppIcon';
 import Button from './Button';
+import { getCurrentUser } from '../../services/auth';
+
 
 const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState(
+    localStorage.getItem('user_email') || 'admin@busflow.com'
+  );
   const location = useLocation();
 
   const navigationItems = [
@@ -40,6 +45,31 @@ const Header = () => {
   const toggleUserMenu = () => {
     setIsUserMenuOpen(!isUserMenuOpen);
   };
+
+  useEffect(() => {
+    let isSubscribed = true;
+
+    const loadUser = async () => {
+      try {
+        const data = await getCurrentUser();
+        const email = data?.email;
+
+        if (isSubscribed && email) {
+          setUserEmail(email);
+          localStorage.setItem('user_email', email);
+        }
+      } catch (error) {
+        console.error('No se pudo obtener el usuario actual', error);
+      }
+    };
+
+    loadUser();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, []);
+
 
   const handleNavigation = (path) => {
     window.location.href = path;
@@ -117,13 +147,13 @@ const Header = () => {
             </Button>
 
             {/* User Dropdown */}
-            {isUserMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-popover border border-border rounded-md shadow-elevated z-20 animate-slide-in-from-top">
-                <div className="p-3 border-b border-border">
-                  <p className="text-sm font-medium text-popover-foreground">System Administrator</p>
-                  <p className="text-xs text-muted-foreground">admin@busflow.com</p>
-                </div>
-                <div className="py-1">
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-popover border border-border rounded-md shadow-elevated z-20 animate-slide-in-from-top">
+                    <div className="p-3 border-b border-border">
+                      <p className="text-sm font-medium text-popover-foreground">System Administrator</p>
+                      <p className="text-xs text-muted-foreground">{userEmail}</p>
+                    </div>
+                    <div className="py-1">
                   <button
                     onClick={() => {
                       setIsUserMenuOpen(false);

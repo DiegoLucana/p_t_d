@@ -7,7 +7,7 @@ import ConfigurationPanel from './components/ConfigurationPanel';
 import ProcessingStatus from './components/ProcessingStatus';
 import ValidationSessionsTable from './components/ValidationSessionsTable';
 import useValidationSessions from '../../hooks/useValidationSessions';
-import { createValidationSession, uploadSessionVideo } from '../../services/validation';
+import { createValidationSession, getValidationFrameStats, getValidationSession, uploadSessionVideo } from '../../services/validation';
 
 const ValidationLaboratory = () => {
   const navigate = useNavigate();
@@ -189,14 +189,57 @@ const ValidationLaboratory = () => {
     handleViewResults(sessionId);
   };
 
-  const handleExport = (sessionId) => {
-    if (sessionId === 'all') {
-      console.log('Exporting all validation sessions...');
-      // Implementar exportación masiva
-    } else {
-      const session = rawSessions?.find(s => s?.id === sessionId);
-      console.log('Exporting session:', session);
-      // Implementar exportación individual
+  const buildSessionReport = async (sessionId) => {
+    const [sessionDetails, frameStats] = await Promise.all([
+      getValidationSession(sessionId),
+      getValidationFrameStats(sessionId),
+    ]);
+
+    return {
+      session: sessionDetails,
+      metrics: {
+        detected_max_occupancy: sessionDetails?.detected_max_occupancy,
+        max_capacity_declared: sessionDetails?.max_capacity_declared,
+        total_frames: sessionDetails?.total_frames,
+        status: sessionDetails?.status,
+      },
+      frames: frameStats,
+      generated_at: new Date().toISOString(),
+    };
+  };
+
+  const downloadReport = (payload, filename) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExport = async (sessionId) => {
+    try {
+      if (sessionId === 'all') {
+        const sessionsToExport = (rawSessions || []).filter((session) => session?.id);
+        if (sessionsToExport.length === 0) return;
+        const reports = await Promise.all(
+          sessionsToExport.map((session) => buildSessionReport(session?.id))
+        );
+
+        downloadReport(
+          { generated_at: new Date().toISOString(), sessions: reports },
+          'validaciones.json'
+        );
+      } else if (sessionId) {
+        const report = await buildSessionReport(sessionId);
+        const filename = `validacion-${sessionId}.json`;
+        downloadReport(report, filename);
+      }
+    } catch (error) {
+      console.error('No se pudo exportar la sesión de validación', error);
     }
   };
 
