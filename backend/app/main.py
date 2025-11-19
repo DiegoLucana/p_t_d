@@ -14,6 +14,7 @@ def create_app() -> FastAPI:
         "http://localhost:4028",  # tu frontend React
         "http://localhost:3000",
         "http://127.0.0.1:4028",
+        "https://p-t-d.vercel.app",
     ]
 
     app.add_middleware(
