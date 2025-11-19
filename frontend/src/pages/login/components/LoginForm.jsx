@@ -32,7 +32,7 @@ const LoginForm = ({ onSubmit, loading, error }) => {
           placeholder="tucorreo@cpatbus.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
+          autoComplete="off"
           required
         />
       </div>
@@ -46,7 +46,7 @@ const LoginForm = ({ onSubmit, loading, error }) => {
           placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
+          autoComplete="off"
           required
         />
       </div>
@@ -72,12 +72,7 @@ const LoginForm = ({ onSubmit, loading, error }) => {
         {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
       </Button>
 
-      <p className="text-xs text-muted-foreground text-center mt-2">
-        Usuario demo:&nbsp;
-        <span className="font-mono">diegolucana@cpatbus.com</span>
-        &nbsp;/&nbsp;
-        <span className="font-mono">cpatbus123</span>
-      </p>
+
     </form>
   );
 };
