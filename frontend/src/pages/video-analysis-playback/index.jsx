@@ -9,6 +9,9 @@ import AudioAlertTester from './components/AudioAlertTester';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
 import useValidationSessionDetails from '../../hooks/useValidationSessionDetails';
+import { exportValidationReport } from '../../services/validation';
+
+
 
 const VideoAnalysisPlayback = () => {
   const location = useLocation();
@@ -23,6 +26,8 @@ const VideoAnalysisPlayback = () => {
   const [detectionData, setDetectionData] = useState([]);
   const [videoSrc, setVideoSrc] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [exporting, setExporting] = useState(false);
+
 
   // Datos que vienen desde el Laboratorio de Validación
   const sessionData = location.state?.sessionData;
@@ -82,6 +87,8 @@ const VideoAnalysisPlayback = () => {
     const processedPath =
       sessionInfo?.processed_video_url ||
       sessionInfo?.processed_video_path ||
+      analysisResults?.video_url ||
+      analysisResults?.video_path ||
       sessionData?.processed_video_url ||
       sessionData?.processed_video_path;
 
@@ -111,10 +118,18 @@ const VideoAnalysisPlayback = () => {
 
   // 🔹 Cargar datos reales del backend (si tenemos sessionId)
   useEffect(() => {
-    if (sessionInfo && !sessionInfo?.processed_video_path && !sessionInfo?.processed_video_url) {
+    const hasProcessedMedia =
+      sessionInfo?.processed_video_path ||
+      sessionInfo?.processed_video_url ||
+      analysisResults?.video_url ||
+      analysisResults?.video_path ||
+      sessionData?.processed_video_path ||
+      sessionData?.processed_video_url;
+
+    if (sessionInfo && !hasProcessedMedia) {  
       setLoadError('El video procesado no está disponible para esta sesión.');
     }
-  }, [sessionInfo]);
+  }, [analysisResults, sessionData, sessionInfo]);
 
   useEffect(() => {
     if (detectionData.length === 0) {
@@ -182,9 +197,21 @@ const VideoAnalysisPlayback = () => {
     console.log(`Alerta ${isActive ? 'activada' : 'desactivada'}: ${count}/${capacity}`);
   };
 
-  const handleExportReport = () => {
-    console.log('Exportando reporte de análisis...');
-    // En el futuro: llamada a backend para generar PDF/CSV
+  const handleExportReport = async () => {
+    if (!sessionId) {
+      setLoadError('No se encontró una sesión válida para exportar el reporte.');
+      return;
+    }
+
+    try {
+      setExporting(true);
+      await exportValidationReport(sessionId);
+    } catch (error) {
+      console.error('No se pudo exportar el reporte de análisis', error);
+      setLoadError('No se pudo exportar el reporte de análisis.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleReturnToLab = () => {
@@ -247,8 +274,9 @@ const VideoAnalysisPlayback = () => {
                 onClick={handleExportReport}
                 iconName="Download"
                 iconPosition="left"
+                disabled={exporting || !sessionId}
               >
-                Exportar Reporte
+                {exporting ? 'Exportando...' : 'Exportar Reporte'}
               </Button>
             </div>
           </div>

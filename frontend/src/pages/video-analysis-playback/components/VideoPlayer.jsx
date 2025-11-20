@@ -19,6 +19,8 @@ const VideoPlayer = ({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showOverlay, setShowOverlay] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
 
   useEffect(() => {
     const video = videoRef?.current;
@@ -29,6 +31,8 @@ const VideoPlayer = ({
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
+    setHasError(false);
+
   }, [videoSrc]);
 
   useEffect(() => {
@@ -157,6 +161,7 @@ const VideoPlayer = ({
     setIsPlaying(false);
     setDuration(0);
     onTimeUpdate?.(0);
+    setHasError(true);
     onVideoError?.(
       'No se pudo cargar el video procesado. Verifica que el archivo exista en el servidor.'
     );
@@ -203,14 +208,19 @@ const VideoPlayer = ({
         )}
 
         {/* Loading Overlay */}
-        {(!duration || !videoSrc) && (
+        {(hasError || !duration || !videoSrc) && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
             <div className="flex items-center space-x-3 text-white">
-              <div className="animate-spin">
-                <Icon name="Loader2" size={24} />
-              </div>
-              <span>Cargando video...</span>
-              <span>{videoSrc ? 'Cargando video...' : 'Video procesado no disponible'}</span>
+              {hasError ? (
+                <span>No se pudo cargar el video procesado.</span>
+              ) : (
+                <>
+                  <div className="animate-spin">
+                    <Icon name="Loader2" size={24} />
+                  </div>
+                  <span>Cargando video...</span>
+                </>
+              )}
 
             </div>
           </div>

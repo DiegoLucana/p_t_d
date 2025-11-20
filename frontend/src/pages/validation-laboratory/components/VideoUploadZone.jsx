@@ -2,7 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
+const VideoUploadZone = ({
+  onFileUpload,
+  isProcessing,
+  processingCountdown = null,
+  processingPhase = 'idle',
+  processingStage = '',
+}) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -91,6 +97,13 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
     fileInputRef?.current?.click();
   };
 
+  const formatCountdown = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+
   return (
     <div className="bg-card rounded-lg border border-border p-6">
       <div className="flex items-center justify-between mb-4">
@@ -136,12 +149,16 @@ const VideoUploadZone = ({ onFileUpload, isProcessing }) => {
               <Icon name="Loader2" size={24} className="text-warning animate-spin" />
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Procesando video...</p>
+              <p className="text-sm font-medium text-foreground">
+                {processingStage || 'Procesando video...'}
+              </p>
               <p className="text-xs text-muted-foreground">
-                Analizando contenido para detección de pasajeros
+                {processingPhase === 'processing'
+                  ? `Tiempo estimado: ${formatCountdown(processingCountdown ?? 180)}`
+                  : 'Analizando contenido para detección de pasajeros'}
               </p>
             </div>
-          </div>
+          </div>    
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-center w-16 h-16 mx-auto bg-muted rounded-full">

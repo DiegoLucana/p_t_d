@@ -7,7 +7,7 @@ import ConfigurationPanel from './components/ConfigurationPanel';
 import ProcessingStatus from './components/ProcessingStatus';
 import ValidationSessionsTable from './components/ValidationSessionsTable';
 import useValidationSessions from '../../hooks/useValidationSessions';
-import { createValidationSession, getValidationFrameStats, getValidationSession, uploadSessionVideo } from '../../services/validation';
+import { createValidationSession, exportValidationReport, getValidationSession, uploadSessionVideo } from '../../services/validation';
 
 const ValidationLaboratory = () => {
   const navigate = useNavigate();
@@ -15,9 +15,14 @@ const ValidationLaboratory = () => {
   const [processingProgress, setProcessingProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState('');
   const [estimatedTime, setEstimatedTime] = useState(null);
+  const [processingPhase, setProcessingPhase] = useState('idle');
+  const [processingCountdown, setProcessingCountdown] = useState(180);
   const [currentFile, setCurrentFile] = useState(null);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const processingIntervalRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
+  const statusPollingRef = useRef(null);
+  const completionTimeoutRef = useRef(null);
   const {
     sessions: validationSessions,
     rawSessions,
@@ -39,6 +44,25 @@ const ValidationLaboratory = () => {
     maxPersonSize: 200
   });
 
+  const clearProcessingIntervals = () => {
+    if (processingIntervalRef.current) {
+      clearInterval(processingIntervalRef.current);
+      processingIntervalRef.current = null;
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    if (statusPollingRef.current) {
+      clearInterval(statusPollingRef.current);
+      statusPollingRef.current = null;
+    }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = null;
+    }
+  };
+
   // 🔹 Crear sesión en backend + subir video
   const createAndUploadValidationSession = async (file, maxCapacity) => {
     try {
@@ -48,6 +72,11 @@ const ValidationLaboratory = () => {
         return null;
       }
 
+      setProcessingPhase('uploading');
+      setProcessingStage('Subiendo video al servidor...');
+      setProcessingProgress(10);
+      setIsProcessing(true);
+  
       await uploadSessionVideo(session.id, file);
       await refreshSessions();
 
@@ -76,25 +105,101 @@ const ValidationLaboratory = () => {
     const sessionId = await createAndUploadValidationSession(file, configuration.maxCapacity);
     if (sessionId) {
       setActiveSessionId(sessionId);
-      startProcessing(sessionId, file);
+      startProcessing(sessionId);
     } else {
       setIsProcessing(false);
+      setProcessingPhase('idle');
+      clearProcessingIntervals();
     }
   };
 
-  const startProcessing = (sessionId, file) => {
+  const startCountdown = (initialSeconds = 180) => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+    }
+
+    setProcessingCountdown(initialSeconds);
+    setEstimatedTime(initialSeconds);
+
+    countdownIntervalRef.current = setInterval(() => {
+      setProcessingCountdown((prev) => {
+        const next = Math.max(prev - 1, 0);
+        setEstimatedTime(next);
+        if (next === 0 && countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+        return next;
+      });
+    }, 1000);
+  };
+
+  const handleProcessingCompleted = (sessionId, latestSession) => {
+    clearProcessingIntervals();
+    setProcessingPhase('completed');
+    setProcessingProgress(100);
+    setProcessingStage('Video procesado exitosamente');
+    setEstimatedTime(0);
     setIsProcessing(true);
-    setProcessingProgress(0);
-    setProcessingStage('Preparando análisis del video...');
-    setEstimatedTime(120); // 2 minutos estimados
+    setCurrentFile(null);
+
+    refreshSessions();
+
+    const sessionFromList = latestSession || rawSessions?.find((s) => s?.id === (sessionId || activeSessionId));
+
+    completionTimeoutRef.current = setTimeout(() => {
+      navigate('/video-analysis-playback', {
+        state: {
+          sessionId: sessionId || activeSessionId,
+          sessionData: sessionFromList,
+        }
+      });
+      setIsProcessing(false);
+      setProcessingPhase('idle');
+      setProcessingProgress(0);
+      setProcessingStage('');
+      setEstimatedTime(null);
+      setProcessingCountdown(180);
+    }, 2500);
+  };
+
+  const startSessionPolling = (sessionId) => {
+    if (!sessionId) return;
+
+    const checkStatus = async () => {
+      try {
+        const session = await getValidationSession(sessionId);
+        const status = session?.status?.toLowerCase?.();
+        if (status === 'completed') {
+          handleProcessingCompleted(sessionId, session);
+        }
+      } catch (error) {
+        console.error('Error verificando estado de la sesión', error);
+      }
+    };
+
+    checkStatus();
+
+    if (statusPollingRef.current) {
+      clearInterval(statusPollingRef.current);
+    }
+
+    statusPollingRef.current = setInterval(checkStatus, 3000);
+  };
+
+  const startProcessing = (sessionId) => {
+    setIsProcessing(true);
+    setProcessingPhase('processing');
+    setProcessingProgress((prev) => (prev < 20 ? 20 : prev));
+    setProcessingStage('El video se está procesando... Tiempo estimado: 3:00 min');
+
+    startCountdown(180);
 
     const stages = [
-      { progress: 15, stage: 'Cargando y validando archivo de video...', time: 100 },
-      { progress: 35, stage: 'Extrayendo frames para análisis...', time: 80 },
-      { progress: 55, stage: 'Aplicando algoritmos de detección...', time: 60 },
-      { progress: 75, stage: 'Contando personas detectadas...', time: 40 },
-      { progress: 90, stage: 'Validando resultados y métricas...', time: 20 },
-      { progress: 100, stage: 'Análisis completado exitosamente', time: 0 }
+      { progress: 30, stage: 'Analizando fotogramas del video...', time: 150 },
+      { progress: 55, stage: 'Aplicando algoritmos de detección...', time: 120 },
+      { progress: 75, stage: 'Contando personas detectadas...', time: 90 },
+      { progress: 90, stage: 'Generando métricas y reportes...', time: 45 },
     ];
 
     let currentStageIndex = 0;
@@ -103,30 +208,15 @@ const ValidationLaboratory = () => {
     }
 
     processingIntervalRef.current = setInterval(() => {
-    if (currentStageIndex < stages?.length) {
+      if (currentStageIndex < stages?.length) {
         const stage = stages?.[currentStageIndex];
         setProcessingProgress(stage?.progress);
         setProcessingStage(stage?.stage);
-        setEstimatedTime(stage?.time);
         currentStageIndex++;
-      } else {
-        clearInterval(processingIntervalRef.current);
-        processingIntervalRef.current = null;
-        setTimeout(() => {
-          setIsProcessing(false);
-          setCurrentFile(null);
-          refreshSessions();
-
-          const sessionFromList = rawSessions?.find((s) => s?.id === (sessionId || activeSessionId));
-          navigate('/video-analysis-playback', {
-            state: {
-              sessionId: sessionId || activeSessionId,
-              sessionData: sessionFromList,
-            }
-          });
-        }, 1000);
       }
-    }, 2000);
+    }, 2500);
+
+    startSessionPolling(sessionId);
   };
 
   // Merge de configuración (lo que ya tenías mejorado)
@@ -143,10 +233,9 @@ const ValidationLaboratory = () => {
     setProcessingProgress(0);
     setProcessingStage('');
     setEstimatedTime(null);
-    if (processingIntervalRef.current) {
-      clearInterval(processingIntervalRef.current);
-      processingIntervalRef.current = null;
-    }
+    setProcessingPhase('idle');
+    setProcessingCountdown(180);
+    clearProcessingIntervals();
   };
 
   const handleNavigateToAnalysis = () => {
@@ -168,9 +257,8 @@ const ValidationLaboratory = () => {
   };
 
   useEffect(() => () => {
-    if (processingIntervalRef.current) {
-      clearInterval(processingIntervalRef.current);
-    }
+    clearProcessingIntervals();
+
   }, []);
 
   const handleViewResults = (sessionId) => {
@@ -189,55 +277,11 @@ const ValidationLaboratory = () => {
     handleViewResults(sessionId);
   };
 
-  const buildSessionReport = async (sessionId) => {
-    const [sessionDetails, frameStats] = await Promise.all([
-      getValidationSession(sessionId),
-      getValidationFrameStats(sessionId),
-    ]);
-
-    return {
-      session: sessionDetails,
-      metrics: {
-        detected_max_occupancy: sessionDetails?.detected_max_occupancy,
-        max_capacity_declared: sessionDetails?.max_capacity_declared,
-        total_frames: sessionDetails?.total_frames,
-        status: sessionDetails?.status,
-      },
-      frames: frameStats,
-      generated_at: new Date().toISOString(),
-    };
-  };
-
-  const downloadReport = (payload, filename) => {
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  };
 
   const handleExport = async (sessionId) => {
     try {
-      if (sessionId === 'all') {
-        const sessionsToExport = (rawSessions || []).filter((session) => session?.id);
-        if (sessionsToExport.length === 0) return;
-        const reports = await Promise.all(
-          sessionsToExport.map((session) => buildSessionReport(session?.id))
-        );
+      await exportValidationReport(sessionId, rawSessions);
 
-        downloadReport(
-          { generated_at: new Date().toISOString(), sessions: reports },
-          'validaciones.json'
-        );
-      } else if (sessionId) {
-        const report = await buildSessionReport(sessionId);
-        const filename = `validacion-${sessionId}.json`;
-        downloadReport(report, filename);
-      }
     } catch (error) {
       console.error('No se pudo exportar la sesión de validación', error);
     }
@@ -311,11 +355,14 @@ const ValidationLaboratory = () => {
 
           {/* Upload and Configuration Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <VideoUploadZone 
+            <VideoUploadZone
               onFileUpload={handleFileUpload}
               isProcessing={isProcessing}
+              processingCountdown={processingCountdown}
+              processingPhase={processingPhase}
+              processingStage={processingStage}
             />
-            <ConfigurationPanel 
+            <ConfigurationPanel
               onConfigurationChange={handleConfigurationChange}
               isProcessing={isProcessing}
             />
