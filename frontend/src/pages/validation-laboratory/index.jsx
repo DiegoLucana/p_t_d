@@ -19,6 +19,7 @@ const ValidationLaboratory = () => {
   const [processingCountdown, setProcessingCountdown] = useState(180);
   const [currentFile, setCurrentFile] = useState(null);
   const [activeSessionId, setActiveSessionId] = useState(null);
+  const [toast, setToast] = useState(null);
   const processingIntervalRef = useRef(null);
   const countdownIntervalRef = useRef(null);
   const statusPollingRef = useRef(null);
@@ -113,6 +114,11 @@ const ValidationLaboratory = () => {
     }
   };
 
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   const startCountdown = (initialSeconds = 180) => {
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
@@ -143,6 +149,9 @@ const ValidationLaboratory = () => {
     setIsProcessing(true);
     setCurrentFile(null);
 
+    showToast('El video fue procesado correctamente.', 'success');
+
+
     refreshSessions();
 
     const sessionFromList = latestSession || rawSessions?.find((s) => s?.id === (sessionId || activeSessionId));
@@ -172,9 +181,16 @@ const ValidationLaboratory = () => {
         const status = session?.status?.toLowerCase?.();
         if (status === 'completed') {
           handleProcessingCompleted(sessionId, session);
+        } else if (status === 'failed') {
+          clearProcessingIntervals();
+          setIsProcessing(false);
+          setProcessingPhase('idle');
+          setProcessingStage('');
+          showToast('Hubo un error procesando el video. Inténtalo nuevamente.', 'error');
         }
       } catch (error) {
         console.error('Error verificando estado de la sesión', error);
+        showToast('No se pudo verificar el estado de la sesión.', 'error');
       }
     };
 
@@ -261,6 +277,24 @@ const ValidationLaboratory = () => {
 
   }, []);
 
+  useEffect(() => {
+    if (!activeSessionId || processingPhase === 'completed') return;
+
+    const activeSession = rawSessions?.find((s) => s?.id === activeSessionId);
+    const normalizedStatus = activeSession?.status?.toLowerCase?.();
+
+    if (normalizedStatus === 'completed') {
+      handleProcessingCompleted(activeSessionId, activeSession);
+    } else if (normalizedStatus === 'failed') {
+      clearProcessingIntervals();
+      setIsProcessing(false);
+      setProcessingPhase('idle');
+      setProcessingStage('');
+      showToast('Hubo un error procesando el video. Inténtalo nuevamente.', 'error');
+    }
+  }, [activeSessionId, processingPhase, rawSessions]);
+
+
   const handleViewResults = (sessionId) => {
     const session = rawSessions?.find(s => s?.id === sessionId);
     if (session) {
@@ -293,6 +327,24 @@ const ValidationLaboratory = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {toast && (
+        <div className="fixed top-4 right-4 z-50"> 
+          <div
+            className={`bg-card border border-border shadow-lg rounded-lg px-4 py-3 flex items-start space-x-3 ${
+              toast.type === 'error' ? 'text-destructive' : 'text-foreground'
+            }`}
+          >
+            <div className="pt-0.5">
+              <Icon
+                name={toast.type === 'error' ? 'AlertTriangle' : 'CheckCircle2'}
+                size={18}
+                className={toast.type === 'error' ? 'text-destructive' : 'text-success'}
+              />
+            </div>
+            <div className="text-sm font-medium leading-snug">{toast.message}</div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

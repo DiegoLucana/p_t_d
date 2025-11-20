@@ -53,8 +53,13 @@ def process_video_with_yolo(
     chosen_output_name = output_filename or f"{video_id}_processed.mp4"
     output_path = os.path.join(PROCESSED_DIR, chosen_output_name)
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    # Prefer H.264/avc1 for broad browser support; fallback to mp4v if unavailable
+    preferred_fourcc = cv2.VideoWriter_fourcc(*"avc1")
+    out = cv2.VideoWriter(output_path, preferred_fourcc, fps, (width, height))
+    if not out.isOpened():
+        logger.warning("Falling back to mp4v codec for processed video output")
+        fallback_fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter(output_path, fallback_fourcc, fps, (width, height))
 
     timeline: List[Dict[str, Any]] = []
     frame_index = 0
