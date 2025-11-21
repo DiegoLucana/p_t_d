@@ -2,7 +2,7 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||   "https://seasonal-medicine-calls-williams.trycloudflare.com/api/v1";
+  import.meta.env.VITE_API_BASE_URL ||   "https://regulation-resistance-hockey-highly.trycloudflare.com/api/v1";
 
 
 const apiClient = axios.create({
